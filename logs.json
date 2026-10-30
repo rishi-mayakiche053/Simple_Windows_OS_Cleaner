@@ -1,0 +1,170 @@
+{
+  "application": "ClearSpace",
+  "version": "1.0",
+  "logs": [
+    {
+      "timestamp": "2026-10-30T15:06:26.537432+00:00",
+      "level": "INFO",
+      "event": "APPLICATION_STARTUP",
+      "message": "ClearSpace started.",
+      "details": {
+        "administrator": false
+      }
+    },
+    {
+      "timestamp": "2026-10-30T15:06:30.684207+00:00",
+      "level": "INFO",
+      "event": "APPLICATION_STARTUP",
+      "message": "ClearSpace started.",
+      "details": {
+        "administrator": true
+      }
+    },
+    {
+      "timestamp": "2026-10-30T15:06:46.336678+00:00",
+      "level": "INFO",
+      "event": "APPLICATION_STARTUP",
+      "message": "ClearSpace started.",
+      "details": {
+        "administrator": false
+      }
+    },
+    {
+      "timestamp": "2026-10-30T15:06:49.239124+00:00",
+      "level": "WARNING",
+      "event": "CUSTOM_DIRECTORIES_LOAD_FAILED",
+      "message": "Custom directories could not be loaded.",
+      "details": {
+        "error": "Expecting value: line 1 column 1 (char 0)"
+      }
+    },
+    {
+      "timestamp": "2026-10-30T15:06:50.164769+00:00",
+      "level": "INFO",
+      "event": "APPLICATION_STARTUP",
+      "message": "ClearSpace started.",
+      "details": {
+        "administrator": true
+      }
+    },
+    {
+      "timestamp": "2026-10-30T15:06:50.663035+00:00",
+      "level": "WARNING",
+      "event": "CUSTOM_DIRECTORIES_LOAD_FAILED",
+      "message": "Custom directories could not be loaded.",
+      "details": {
+        "error": "Expecting value: line 1 column 1 (char 0)"
+      }
+    },
+    {
+      "timestamp": "2026-10-30T15:06:51.979706+00:00",
+      "level": "INFO",
+      "event": "APPLICATION_SHUTDOWN",
+      "message": "ClearSpace is shutting down."
+    },
+    {
+      "timestamp": "2026-10-30T15:06:56.853064+00:00",
+      "level": "INFO",
+      "event": "CLEANUP_PREVIEW_STARTED",
+      "message": "Cleanup preview started.",
+      "details": {
+        "directory_count": 3
+      }
+    },
+    {
+      "timestamp": "2026-10-30T15:06:56.874926+00:00",
+      "level": "INFO",
+      "event": "CLEANUP_PREVIEW_COMPLETED",
+      "message": "Cleanup preview completed.",
+      "details": {
+        "files_detected": 23,
+        "space_reclaimable_bytes": 9138823,
+        "directories_scanned": 4,
+        "inaccessible_items": 0
+      }
+    },
+    {
+      "timestamp": "2026-10-30T15:06:58.102405+00:00",
+      "level": "INFO",
+      "event": "CLEANUP_STARTED",
+      "message": "Cleanup operation started after preview confirmation.",
+      "details": {
+        "directories": [
+          "C:\\Windows\\Prefetch",
+          "C:\\Windows\\Temp",
+          "C:\\Users\\rishi\\AppData\\Local\\Temp"
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-10-30T15:06:58.244983+00:00",
+      "level": "WARNING",
+      "event": "CLEANUP_COMPLETED",
+      "message": "Cleanup operation completed.",
+      "details": {
+        "files_deleted": 11,
+        "items_deleted": 11,
+        "space_reclaimed_bytes": 188614,
+        "failed_items": 10,
+        "failed_operations": [
+          {
+            "path": "C:\\Windows\\Temp\\DELL9020-20261030-1416.log",
+            "error_type": "PermissionError",
+            "error": "[WinError 32] Le processus ne peut pas accéder au fichier car ce fichier est utilisé par un autre processus: 'C:\\\\Windows\\\\Temp\\\\DELL9020-20261030-1416.log'"
+          },
+          {
+            "path": "C:\\Users\\rishi\\AppData\\Local\\Temp\\0740777a-bab5-4558-850e-1a8eeac025d2.tmp",
+            "error_type": "PermissionError",
+            "error": "[WinError 32] Le processus ne peut pas accéder au fichier car ce fichier est utilisé par un autre processus: 'C:\\\\Users\\\\rishi\\\\AppData\\\\Local\\\\Temp\\\\0740777a-bab5-4558-850e-1a8eeac025d2.tmp'"
+          },
+          {
+            "path": "C:\\Users\\rishi\\AppData\\Local\\Temp\\2ae5f285-137d-4550-89d6-cec2adef5a2f.tmp",
+            "error_type": "PermissionError",
+            "error": "[WinError 32] Le processus ne peut pas accéder au fichier car ce fichier est utilisé par un autre processus: 'C:\\\\Users\\\\rishi\\\\AppData\\\\Local\\\\Temp\\\\2ae5f285-137d-4550-89d6-cec2adef5a2f.tmp'"
+          },
+          {
+            "path": "C:\\Users\\rishi\\AppData\\Local\\Temp\\2f76f2e6-efba-4cca-bd0f-b0ea813f36c3.tmp",
+            "error_type": "PermissionError",
+            "error": "[WinError 32] Le processus ne peut pas accéder au fichier car ce fichier est utilisé par un autre processus: 'C:\\\\Users\\\\rishi\\\\AppData\\\\Local\\\\Temp\\\\2f76f2e6-efba-4cca-bd0f-b0ea813f36c3.tmp'"
+          },
+          {
+            "path": "C:\\Users\\rishi\\AppData\\Local\\Temp\\4782b4a3-eaa6-41ea-a78b-48607e646266.tmp",
+            "error_type": "PermissionError",
+            "error": "[WinError 32] Le processus ne peut pas accéder au fichier car ce fichier est utilisé par un autre processus: 'C:\\\\Users\\\\rishi\\\\AppData\\\\Local\\\\Temp\\\\4782b4a3-eaa6-41ea-a78b-48607e646266.tmp'"
+          },
+          {
+            "path": "C:\\Users\\rishi\\AppData\\Local\\Temp\\4e4fadd2-8ba2-41b4-9fc1-71de19019c70.tmp",
+            "error_type": "PermissionError",
+            "error": "[WinError 32] Le processus ne peut pas accéder au fichier car ce fichier est utilisé par un autre processus: 'C:\\\\Users\\\\rishi\\\\AppData\\\\Local\\\\Temp\\\\4e4fadd2-8ba2-41b4-9fc1-71de19019c70.tmp'"
+          },
+          {
+            "path": "C:\\Users\\rishi\\AppData\\Local\\Temp\\55e1943e-3aa0-4875-afa4-cf8d27a8167c.tmp",
+            "error_type": "PermissionError",
+            "error": "[WinError 32] Le processus ne peut pas accéder au fichier car ce fichier est utilisé par un autre processus: 'C:\\\\Users\\\\rishi\\\\AppData\\\\Local\\\\Temp\\\\55e1943e-3aa0-4875-afa4-cf8d27a8167c.tmp'"
+          },
+          {
+            "path": "C:\\Users\\rishi\\AppData\\Local\\Temp\\5853f44b-ebf0-49b7-be41-48d25fafaa87.tmp",
+            "error_type": "PermissionError",
+            "error": "[WinError 32] Le processus ne peut pas accéder au fichier car ce fichier est utilisé par un autre processus: 'C:\\\\Users\\\\rishi\\\\AppData\\\\Local\\\\Temp\\\\5853f44b-ebf0-49b7-be41-48d25fafaa87.tmp'"
+          },
+          {
+            "path": "C:\\Users\\rishi\\AppData\\Local\\Temp\\da5c0b97-1ab8-45d9-b0b7-92babd72d3c7.tmp",
+            "error_type": "PermissionError",
+            "error": "[WinError 32] Le processus ne peut pas accéder au fichier car ce fichier est utilisé par un autre processus: 'C:\\\\Users\\\\rishi\\\\AppData\\\\Local\\\\Temp\\\\da5c0b97-1ab8-45d9-b0b7-92babd72d3c7.tmp'"
+          },
+          {
+            "path": "C:\\Users\\rishi\\AppData\\Local\\Temp\\e804dcdc-8f79-4ee3-afe9-85713eb7cf19.tmp",
+            "error_type": "PermissionError",
+            "error": "[WinError 32] Le processus ne peut pas accéder au fichier car ce fichier est utilisé par un autre processus: 'C:\\\\Users\\\\rishi\\\\AppData\\\\Local\\\\Temp\\\\e804dcdc-8f79-4ee3-afe9-85713eb7cf19.tmp'"
+          }
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-10-30T15:07:04.738487+00:00",
+      "level": "INFO",
+      "event": "APPLICATION_SHUTDOWN",
+      "message": "ClearSpace is shutting down."
+    }
+  ]
+}
