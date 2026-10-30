@@ -358,6 +358,7 @@ def main() -> None:
     """Launch the graphical cleaner."""
     if os.name != "nt":
         messagebox.showwarning("Windows only", "This program is intended for Windows.")
+        return
     if not is_admin() and not request_admin():
         pass
     app = CleanerApp()
