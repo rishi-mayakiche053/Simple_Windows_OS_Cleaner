@@ -413,7 +413,7 @@ def clean_directory(directory: Path) -> CleanupResult:
             except OSError as error:
                 failed.append((entry, error))
 
-    if not directory.is_dir():
+    if not directory.is_dir() or _is_reparse_point(directory):
         error = OSError("folder not found")
         failed.append((directory, error))
         log_event(
