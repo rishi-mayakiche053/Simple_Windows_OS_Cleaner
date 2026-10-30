@@ -16,8 +16,8 @@ import customtkinter as ctk
 
 
 TARGET_DIRECTORIES = (
-    Path(r"C:\Windows\Prefetch"),
-    Path(r"C:\Windows\Temp"),
+    Path(os.environ.get("SystemRoot", r"C:\Windows")) / "Prefetch",
+    Path(os.environ.get("SystemRoot", r"C:\Windows")) / "Temp",
     Path(r"C:\Users\rishi\AppData\Local\Temp"),
 )
 
