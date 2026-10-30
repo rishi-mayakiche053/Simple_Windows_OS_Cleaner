@@ -1,174 +1,123 @@
-# 🧹 ClearSpace — Simple Windows OS Cleaner
+# ClearSpace
 
-> **A modern, animated Windows temporary-file cleaner built with Python and
-> CustomTkinter.**
+### A lightweight Windows cleaner built with Python and CustomTkinter
 
-ClearSpace removes the contents of selected Windows temporary directories while
-keeping the three main directories themselves. It provides a dark modern
-interface, rounded controls, animated status feedback, confirmation dialogs,
-and a numbered cleanup summary.
+[![Windows](https://img.shields.io/badge/Platform-Windows-0078D4?style=flat-square&logo=windows&logoColor=white)](https://www.microsoft.com/windows)
+[![Python](https://img.shields.io/badge/Language-Python-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![CustomTkinter](https://img.shields.io/badge/Interface-CustomTkinter-245C9C?style=flat-square)](https://github.com/TomSchimansky/CustomTkinter)
+
+ClearSpace is a personal project designed to clean selected Windows temporary directories through a modern dark interface.
+
+It lets you manage cleaning locations, monitor the process and review the results.
+
+> [!WARNING]
+> **Deletion is permanent.** Files are not moved to the Recycle Bin, and there is no undo function. Always review your selected folders before cleaning.
 
 ---
 
-## 🟢 Important things to know / Requirements
+## ✨ Features
 
-### ⚠️ Quick summary
+- Modern dark interface with blue accents.
+- Select built-in or custom cleaning locations.
+- Add and remove custom folders.
+- Recursive file and folder cleanup.
+- Background processing to keep the interface responsive.
+- Read-only cleanup preview with file-count and size statistics.
+- Directory-by-directory preview breakdown before deletion.
+- Animated progress and status feedback.
+- Administrator privileges through Windows UAC.
+- Cleanup reports showing deleted and skipped items.
+- Persistent structured activity history in `logs.json`.
 
-- **Windows + Python** are required.
-- Install the interface package:
+## 📁 Cleaning locations
+
+ClearSpace offers these default locations:
+
+- `C:\Windows\Prefetch`
+- `C:\Windows\Temp`
+- `%LOCALAPPDATA%\Temp`
+
+You can also add your own folders.
+
+**The selected root directories are preserved.** Only their contents are targeted.
+
+Custom folder selections are saved in `custom_directories.json`.
+
+## 📦 Installation
+
+**Requirements:** Windows, Python and CustomTkinter.
+
+Install the required package:
 
 ```powershell
 python -m pip install customtkinter
 ```
 
-- Tkinter is included with standard Python; no separate installation is
-  normally needed.
-- The cleaner permanently deletes contents, not the three root folders.
-- It can clean `Prefetch`, `Windows\Temp`, and the user's temporary folder.
-- Administrator access may be needed for protected files.
-- Locked files are skipped and reported.
-
-Start it with:
+Launch ClearSpace:
 
 ```powershell
 python os_cleaner.py
 ```
 
----
+## ▶️ How to use
 
-## ✨ Main features
+1. Select the folders you want to clean.
+2. Add custom locations if needed.
+3. Click **Preview cleanup**.
+4. Review the read-only analysis.
+5. Click **Continue to cleanup** or **Cancel**.
+6. Open **Deleted files** to inspect the results.
 
-- **Modern dark interface** with blue accent colors and rounded controls.
-- **Animated cleanup state** with a responsive progress indicator.
-- **Non-blocking cleanup** using a background worker thread.
-- **Folder selection cards** with individual checkboxes.
-- **Select all** control for quick cleanup.
-- **Confirmation dialog** before permanent deletion.
-- **Administrator-mode badge** showing the current privilege level.
-- **Numbered result report** listing every successfully deleted file and folder.
-- **Failure report** showing items that could not be deleted and the reason.
-- **Root-folder protection** so the configured root folders remain available.
+Some protected or currently used files may be skipped. Administrator access can help with restricted locations.
 
----
+The preview never deletes, moves, or changes files. Its values are
+informational: ClearSpace performs a fresh cleanup pass after confirmation
+because files may change between analysis and deletion.
 
-## 🔧 Advanced Informations
-
-### Cleanup behavior
-
-The `clean_directory()` function receives one root directory and:
-
-1. Checks whether the directory exists.
-2. Reads its contents.
-3. Recursively enters normal subfolders.
-4. Deletes files and symbolic links with `unlink()`.
-5. Removes subfolders after their contents have been removed.
-6. Keeps the selected root directory untouched.
-7. Records successful deletions in a list.
-8. Records `OSError` failures instead of stopping the complete cleanup.
-
-Symbolic-link directories are not traversed as normal folders. This prevents
-the cleaner from following a link outside the selected Windows directory.
-
-### Deletion and recovery
-
-The program uses Python's `Path.unlink()` and `Path.rmdir()` methods. These
-perform direct filesystem deletion:
-
-- Deleted files do **not** go to the Recycle Bin.
-- The application does not provide an undo function.
-- A locked file may remain if Windows or another application is using it.
-- The final dialog reports every successful deletion and every skipped item.
-
-Review the selected locations carefully before confirming a cleanup.
-
-### Administrator elevation
-
-The application checks Windows administrator status with
-`ctypes.windll.shell32.IsUserAnAdmin()`. If administrator privileges are not
-available, it requests elevation with Windows UAC by calling
-`ShellExecuteW(..., "runas", ...)`.
-
-If elevation is cancelled, the application can still open in standard mode.
-Some protected files may then be skipped.
-
-### Interface and animation
-
-The interface is built with `customtkinter` and uses:
-
-- `CTk` for the application window.
-- `CTkFrame` for layout cards.
-- `CTkCheckBox` for folder selection.
-- `CTkButton` for rounded modern actions.
-- `CTkProgressBar` for animated cleanup feedback.
-- Tkinter's `after()` scheduler for lightweight status animation.
-
-No separate animation package is required.
-
-### Threading model
-
-Filesystem cleanup runs in a daemon background thread so the interface remains
-responsive. Results are transferred safely to the GUI thread through
-`queue.Queue`. Tkinter widgets are updated only by the main GUI thread.
-
-### Python standard-library modules
-
-These modules are included with Python and do not need to be installed:
-
-```text
-ctypes
-dataclasses
-os
-pathlib
-queue
-subprocess
-sys
-threading
-tkinter
-```
-
-Only `customtkinter` is an external dependency.
-
-### Troubleshooting
-
-#### `ModuleNotFoundError: No module named 'customtkinter'`
-
-Install the package using the same Python interpreter used to start the
-program:
-
-```powershell
-python -m pip install customtkinter
-```
-
-#### Tkinter cannot be imported
-
-Reinstall Python from [python.org](https://www.python.org/downloads/windows/)
-and make sure the standard library and Tcl/Tk components are included.
-
-#### Some files cannot be deleted
-
-This is expected when files are locked, protected, or currently in use. Close
-the application using the file, run ClearSpace as administrator, and try again.
-
-#### The application does not start with administrator privileges
-
-Right-click PowerShell or Command Prompt, select **Run as administrator**, then
-launch the program again:
-
-```powershell
-python os_cleaner.py
-```
-
-### Project files
+## 🧩 Project structure
 
 | File | Purpose |
 |---|---|
-| [`os_cleaner.py`](os_cleaner.py) | Main graphical application and cleanup logic |
-| [`requirements.md`](requirements.md) | Installation and dependency guide |
-| [`diagram organisation.md`](diagram%20organisation.md) | Original project organization notes |
+| `cleaner.py` | Cleanup engine and backend operations |
+| `ui.py` | CustomTkinter interface and application controls |
+| `os_cleaner.py` | Application launcher |
+| `requirements.md` | Installation guide |
+| `diagram organisation.md` | Original project planning notes |
 
----
+The launcher connects the interface to the backend, keeping the project organized into separate files.
 
-## 📄 License and project status
+## 📝 JSON logging
 
-This is a personal project created for learning and experimentation. Review
-the code and the selected paths before using it on an important computer.
+ClearSpace stores structured application history in the single JSON file
+`logs.json` next to the application files. The file is created automatically
+when the first event is recorded.
+
+Logged events include application startup and shutdown, administrator status,
+preview start and completion, cleanup start and completion, custom-folder
+changes, and unexpected or logging errors. Cleanup results are kept in the
+single completion event rather than duplicated across separate deleted/skipped
+events.
+
+Each entry includes an ISO 8601 timestamp, log level, event name, message, and
+optional directory and operation details such as file counts, failure counts,
+and reclaimed bytes.
+
+The logger uses Python's built-in `json` module, a thread lock, and an atomic
+temporary-file replacement. Missing or empty files are initialized safely. If
+`logs.json` contains invalid JSON, the unreadable content is preserved in a
+recoverable JSON `details` entry before normal logging continues. Logging
+failures are isolated so they cannot crash the cleaner or freeze its UI.
+
+## 🔒 Safety
+
+- Deletion is permanent.
+- Root folders are preserved.
+- Locked or inaccessible files may be skipped.
+- Custom folders can be removed from the list without deleting their contents.
+- Cleanup requires explicit confirmation.
+
+## 📄 License
+
+ClearSpace is a personal project created for learning and experimentation.
+
+Use it carefully and review the selected locations before starting a cleanup.
