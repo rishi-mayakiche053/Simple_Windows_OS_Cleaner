@@ -6,139 +6,99 @@
 [![Python](https://img.shields.io/badge/Language-Python-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![CustomTkinter](https://img.shields.io/badge/Interface-CustomTkinter-245C9C?style=flat-square)](https://github.com/TomSchimansky/CustomTkinter)
 
-ClearSpace previews and cleans selected Windows folders through a responsive
-dashboard.
+ClearSpace previews and cleans selected Windows folders through a modern, responsive dashboard.
 
 > [!WARNING]
-> **Deletion is permanent.** Files are not moved to the Recycle Bin and there
-> is no undo function. Always review the selected locations and preview before
-> continuing.
+> **Deletion is permanent.** Files are not moved to the Recycle Bin and cannot be restored through ClearSpace. Always review the preview before continuing.
 
 ---
 
 ## Features
 
-- Preview files, sizes, warnings, and directory breakdowns before deletion.
-- Clean built-in or custom folders recursively while preserving their roots.
-- Skip inaccessible, locked, symbolic-link, and other reparse-point items.
-- Cancel cleanup safely while keeping the interface responsive.
-- Use UAC elevation when available, with safe standard-mode fallback.
-- Reject drive roots and protected Windows, user-profile, Users, and Program
-  Files locations.
-- Use normalized paths and atomic configuration/log writes.
-- Use a modern dark, scrollable dashboard with grouped locations, status
-  animation, availability labels, hover feedback, and safe Exit controls.
-- Use `Ctrl+P` for preview, `Escape` to cancel/close, and `Enter` to continue.
-- View, filter, copy, or save deleted and skipped-item reports.
+- Preview files, sizes, and directory breakdowns before deletion.
+- Clean built-in and custom folders recursively.
+- Skip inaccessible files, symbolic links, and reparse points.
+- Cancel active cleanup using the **Cancel cleanup** button.
+- Use administrator privileges through UAC when available.
+- Validate paths to protect important system directories.
+- View, filter, copy, and save cleanup reports.
+- Modern dark interface with progress feedback and animations.
+- Keyboard shortcuts: `Ctrl+P` (preview), `Escape` (cancel), `Enter` (confirm).
 - Default window size: `760x890`.
 
 ## Cleaning locations
 
-ClearSpace offers these default locations:
+Default folders:
 
 - `C:\Windows\Prefetch`
 - `C:\Windows\Temp`
 - `%LOCALAPPDATA%\Temp`
 
-The local temporary folder uses the current user's `%LOCALAPPDATA%`, with a
-`Path.home()` fallback.
+Custom folders can be added through the interface and are saved automatically.
 
-You can add custom folders through the interface. Custom selections are saved
-in `custom_directories.json`, and removing a custom folder from the list does
-not delete its contents.
-
-## Requirements
+## Requirements and installation
 
 - Windows
-- Python 3.9 or newer
-- Tkinter
-- CustomTkinter
+- Python 3.9+
+- Tkinter and CustomTkinter
 
-Install the required package:
-
-```powershell
-python -m pip install customtkinter
-```
-
-Tkinter is normally included with Windows Python. Check it with:
-
-```powershell
-python -c "import tkinter; print('Tkinter is installed')"
-```
-
-## Installation and launch
-
-From the project directory, run:
+Install and launch:
 
 ```powershell
 python -m pip install customtkinter
 python os_cleaner.py
 ```
 
-ClearSpace may request UAC elevation. If refused, it continues in standard
-mode, but some protected files may not be removable.
+**Important:** Always launch ClearSpace using `os_cleaner.py`.
 
 ## How to use
 
-1. Select the locations you want to clean.
-2. Add custom locations if needed.
-3. Click **Preview cleanup** or press `Ctrl+P`.
-4. Review the file count, potential space reclaimed, warnings, and directory
-   breakdown.
-5. Click **Continue to cleanup** to begin deletion, or **Cancel** to return.
-6. Use **Cancel cleanup** or press `Escape` to request cancellation during an
-   active cleanup.
-7. Open **View last report** to inspect, filter, copy, or save the results.
-8. Use **Exit** to close the application safely.
+1. Select the folders to clean.
+2. Click **Preview cleanup**.
+3. Review the files and estimated space to reclaim.
+4. Click **Continue to cleanup** to proceed.
+5. Use **Cancel cleanup** to request cancellation during an operation.
+6. Open **View last report** to inspect the results.
 
-The preview is read-only, and ClearSpace performs a fresh cleanup pass after
-confirmation because files may change.
+The preview is read-only. A fresh scan is performed before deletion.
+
+## Configuration and logs
+
+ClearSpace automatically creates and maintains:
+
+| File | Purpose |
+|---|---|
+| `custom_directories.json` | Saves custom cleanup locations. |
+| `logs.json` | Stores activity, cleanup history, cancellations, and errors. |
+
+Both files use atomic writes to reduce the risk of data corruption.
 
 ## Testing
 
-Run the automated tests from the project directory:
+Run the automated tests:
 
 ```powershell
 python -m unittest discover -s tests -v
 ```
 
-Tests cover path detection, root preservation, safety validation, duplicate
-handling, atomic writes, administrator relaunch, cancellation, reparse-point
-protection, and log recovery.
-
 ## Project structure
 
 | File or folder | Purpose |
 |---|---|
-| `cleaner.py` | Cleanup engine, safety validation, logging, and persistence |
-| `ui.py` | CustomTkinter dashboard and application controls |
-| `os_cleaner.py` | Application launcher |
-| `tests/` | Automated backend tests |
-| `custom_directories.json` | Saved custom cleanup locations |
-| `logs.json` | Generated structured activity history |
-| `requirements.md` | Installation guide |
-| `diagram organisation.md` | Original project planning notes |
-| `new_changes_list.txt` | Detailed implementation change history |
-| `README_updated_draft.md` | Draft documentation containing the latest changes |
+| `cleaner.py` | Cleanup engine and safety checks. |
+| `ui.py` | Graphical interface. |
+| `os_cleaner.py` | Application launcher. |
+| `requirements.md` | Installation guide. |
+| `diagram organisation.md` | Project planning notes. |
 
-## Logging
-
-ClearSpace stores structured activity history in `logs.json`, including
-timestamps, levels, events, messages, operation details, cancellations, and
-errors. Logs are created automatically and written atomically.
-
-## Safety limitations
+## Safety
 
 - Deletion is permanent.
-- Deleted files are not moved to the Recycle Bin.
 - Locked or inaccessible files may be skipped.
-- Files can change between preview and cleanup.
-- Cancellation stops before the next item; the current filesystem operation
-  may finish first.
-- The application should not be force-terminated during cleanup.
+- Files may change between preview and cleanup.
+- Cancellation takes effect after the current filesystem operation finishes.
+- Avoid force-closing the application during cleanup.
 
 ## License
 
 ClearSpace is a personal project created for learning and experimentation.
-
-Use it carefully and review the selected folders before starting a cleanup.
