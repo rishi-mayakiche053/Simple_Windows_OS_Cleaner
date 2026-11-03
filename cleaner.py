@@ -18,11 +18,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-# These are the only root folders the application is allowed to clean.
+def get_local_temp_directory() -> Path:
+    """Return the current user's local temporary directory."""
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        return Path(local_app_data) / "Temp"
+    return Path.home() / "AppData" / "Local" / "Temp"
+
+
+# These are the default root folders the application offers for cleaning.
 TARGET_DIRECTORIES = (
     Path(r"C:\Windows\Prefetch"),
     Path(r"C:\Windows\Temp"),
-    Path(r"C:\Users\rishi\AppData\Local\Temp"),
+    get_local_temp_directory(),
 )
 CUSTOM_DIRECTORIES_FILE = Path(__file__).with_name("custom_directories.json")
 LOGS_FILE = Path(__file__).with_name("logs.json")
@@ -40,6 +48,7 @@ class CleanupResult:
     failed: list[tuple[Path, OSError]]
     files_deleted: int = 0
     space_reclaimed_bytes: int = 0
+    cancelled: bool = False
 
 
 @dataclass
@@ -283,8 +292,32 @@ def validate_cleanup_directory(directory: Path) -> str | None:
         resolved = directory.resolve()
         if resolved == Path(resolved.anchor):
             return "A drive root cannot be added."
+        if any(
+            resolved == target.resolve()
+            for target in TARGET_DIRECTORIES
+        ):
+            return None
         windows_root = Path(os.environ.get("WINDIR", r"C:\Windows")).resolve()
-        if resolved in (windows_root, windows_root / "System32", windows_root / "SysWOW64"):
+        user_profile = Path(
+            os.environ.get("USERPROFILE", str(Path.home()))
+        ).resolve()
+        users_root = user_profile.parent
+        protected_subtree_roots = (
+            windows_root,
+            windows_root / "System32",
+            windows_root / "SysWOW64",
+            Path(os.environ.get("ProgramFiles", r"C:\Program Files")).resolve(),
+            Path(
+                os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+            ).resolve(),
+        )
+        if any(
+            resolved == protected
+            for protected in (user_profile, users_root)
+        ) or any(
+            resolved == protected or protected in resolved.parents
+            for protected in protected_subtree_roots
+        ):
             return "This protected Windows system folder cannot be added."
     except OSError as error:
         return f"The folder could not be validated: {error}"
@@ -311,20 +344,50 @@ def load_custom_directories() -> list[Path]:
     if not isinstance(values, list):
         return []
     directories: list[Path] = []
+    normalized_directories: set[Path] = set()
+    normalized_targets = {target.resolve() for target in TARGET_DIRECTORIES}
     for value in values:
         if isinstance(value, str):
             directory = Path(value)
-            if directory not in TARGET_DIRECTORIES and directory not in directories:
+            try:
+                normalized = directory.resolve()
+            except OSError:
+                continue
+            if (
+                normalized not in normalized_targets
+                and normalized not in normalized_directories
+            ):
                 directories.append(directory)
+                normalized_directories.add(normalized)
     return directories
 
 
 def save_custom_directories(directories: list[Path]) -> None:
     """Persist user-added folders for the next application launch."""
-    CUSTOM_DIRECTORIES_FILE.write_text(
-        json.dumps([str(directory) for directory in directories], indent=2),
-        encoding="utf-8",
-    )
+    CUSTOM_DIRECTORIES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=CUSTOM_DIRECTORIES_FILE.parent,
+            prefix=f"{CUSTOM_DIRECTORIES_FILE.stem}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            temporary_path = temporary.name
+            json.dump([str(directory) for directory in directories], temporary, indent=2)
+            temporary.write("\n")
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary_path, CUSTOM_DIRECTORIES_FILE)
+        temporary_path = None
+    finally:
+        if temporary_path:
+            try:
+                os.unlink(temporary_path)
+            except OSError:
+                pass
 
 
 def is_admin() -> bool:
@@ -360,12 +423,16 @@ def request_admin(script_path: Path | None = None) -> bool:
     return result > 32
 
 
-def clean_directory(directory: Path) -> CleanupResult:
+def clean_directory(
+    directory: Path,
+    cancellation_event: threading.Event | None = None,
+) -> CleanupResult:
     """Remove all contents in a directory while preserving its root folder."""
     deleted: list[Path] = []
     failed: list[tuple[Path, OSError]] = []
     deleted_files = 0
     reclaimed_bytes = 0
+    cancelled = False
 
     validation_error = validate_cleanup_directory(directory)
     if validation_error:
@@ -380,7 +447,10 @@ def clean_directory(directory: Path) -> CleanupResult:
         return CleanupResult(deleted, failed)
 
     def remove_contents(folder: Path) -> None:
-        nonlocal deleted_files, reclaimed_bytes
+        nonlocal cancelled, deleted_files, reclaimed_bytes
+        if cancellation_event and cancellation_event.is_set():
+            cancelled = True
+            return
         # Read one folder at a time so nested folders can be handled recursively.
         try:
             entries = list(folder.iterdir())
@@ -389,10 +459,18 @@ def clean_directory(directory: Path) -> CleanupResult:
             return
 
         for entry in entries:
-            if entry.is_dir() and not _is_reparse_point(entry):
+            if cancellation_event and cancellation_event.is_set():
+                cancelled = True
+                return
+            if _is_reparse_point(entry):
+                failed.append((entry, OSError("reparse point skipped")))
+                continue
+            if entry.is_dir():
                 # Clean a subfolder before removing it, leaving the selected
                 # root directory untouched.
                 remove_contents(entry)
+                if cancelled:
+                    return
                 try:
                     entry.rmdir()
                     deleted.append(entry)
@@ -400,6 +478,9 @@ def clean_directory(directory: Path) -> CleanupResult:
                     failed.append((entry, error))
                 continue
 
+            if _is_reparse_point(entry):
+                failed.append((entry, OSError("reparse point skipped")))
+                continue
             try:
                 file_size = (
                     entry.stat(follow_symlinks=False).st_size
@@ -423,7 +504,13 @@ def clean_directory(directory: Path) -> CleanupResult:
             directory=directory,
             details={"error": str(error)},
         )
-        return CleanupResult(deleted, failed)
+        return CleanupResult(deleted, failed, cancelled=cancelled)
 
     remove_contents(directory)
-    return CleanupResult(deleted, failed, deleted_files, reclaimed_bytes)
+    return CleanupResult(
+        deleted,
+        failed,
+        deleted_files,
+        reclaimed_bytes,
+        cancelled,
+    )

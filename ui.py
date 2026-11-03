@@ -47,11 +47,20 @@ class CleanerApp(ctk.CTk):
         super().__init__()
         # Set the window size before building the layout.
         self.title("ClearSpace")
-        self.geometry("760x700")
+        self.geometry("760x890")
         self.minsize(680, 620)
         self.configure(fg_color=self.BG)
+        self.content = ctk.CTkScrollableFrame(
+            self,
+            fg_color="transparent",
+            scrollbar_button_color=self.CARD_HOVER,
+            scrollbar_button_hover_color=self.ACCENT,
+        )
+        self.content.pack(fill="both", expand=True, padx=8, pady=8)
 
         self.running = False
+        self.cleanup_cancellation = threading.Event()
+        self.close_requested = False
         self.animation_step = 0
         # Worker-thread results are passed back safely through this queue.
         self.results: queue.Queue[tuple[str, object]] = queue.Queue()
@@ -69,18 +78,28 @@ class CleanerApp(ctk.CTk):
         self._build_report_button()
         self._animate_header()
         self._animate_ui()
+        self.bind("<Control-p>", lambda event: self._confirm_cleanup())
+        self.bind("<Escape>", lambda event: self._cancel_cleanup())
 
     def _build_header(self) -> None:
         # The header identifies the program and shows the current privilege mode.
-        header = ctk.CTkFrame(self, fg_color="transparent")
+        header = ctk.CTkFrame(self.content, fg_color="transparent")
         header.pack(fill="x", padx=36, pady=(30, 12))
 
+        title_row = ctk.CTkFrame(header, fg_color="transparent")
+        title_row.pack(fill="x")
         ctk.CTkLabel(
-            header,
+            title_row,
             text="ClearSpace",
             font=ctk.CTkFont(size=32, weight="bold"),
             text_color=self.TEXT,
-        ).pack(anchor="w")
+        ).pack(side="left", anchor="w")
+        ctk.CTkLabel(
+            title_row,
+            text="Windows cleanup dashboard",
+            font=ctk.CTkFont(size=12),
+            text_color=self.MUTED,
+        ).pack(side="right", anchor="s", pady=(0, 7))
         self.subtitle = ctk.CTkLabel(
             header,
             text="A cleaner, calmer Windows workspace",
@@ -104,7 +123,7 @@ class CleanerApp(ctk.CTk):
     def _build_folder_section(self) -> None:
         # Each location gets its own card and checkbox so users can choose
         # exactly which roots to clean.
-        title_row = ctk.CTkFrame(self, fg_color="transparent")
+        title_row = ctk.CTkFrame(self.content, fg_color="transparent")
         title_row.pack(fill="x", padx=36, pady=(18, 8))
         ctk.CTkLabel(
             title_row,
@@ -146,7 +165,13 @@ class CleanerApp(ctk.CTk):
             command=self._remove_folder,
         ).pack(side="right", padx=(0, 8))
 
-        self.folder_frame = ctk.CTkFrame(self, fg_color="transparent")
+        ctk.CTkLabel(
+            self.content,
+            text="Built-in locations",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=self.MUTED,
+        ).pack(anchor="w", padx=36, pady=(4, 2))
+        self.folder_frame = ctk.CTkFrame(self.content, fg_color="transparent")
         self.folder_frame.pack(fill="x", padx=36)
         self._rebuild_folder_cards()
 
@@ -155,7 +180,16 @@ class CleanerApp(ctk.CTk):
         for _, _, card, _ in self.folder_records:
             card.destroy()
         self.folder_records.clear()
-        for directory in (*TARGET_DIRECTORIES, *self.custom_directories):
+        for index, directory in enumerate(
+            (*TARGET_DIRECTORIES, *self.custom_directories)
+        ):
+            if index == len(TARGET_DIRECTORIES) and self.custom_directories:
+                ctk.CTkLabel(
+                    self.folder_frame,
+                    text="Custom locations",
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    text_color=self.MUTED,
+                ).pack(anchor="w", pady=(12, 2))
             variable = ctk.BooleanVar(value=True)
             card = ctk.CTkFrame(
                 self.folder_frame,
@@ -165,6 +199,12 @@ class CleanerApp(ctk.CTk):
             )
             card.pack(fill="x", pady=5)
             card.pack_propagate(False)
+            card.bind("<Enter>", lambda event, frame=card: frame.configure(
+                fg_color=self.CARD_HOVER
+            ))
+            card.bind("<Leave>", lambda event, frame=card: frame.configure(
+                fg_color=self.CARD
+            ))
             check = ctk.CTkCheckBox(
                 card,
                 text="",
@@ -192,6 +232,13 @@ class CleanerApp(ctk.CTk):
                 text_color=self.MUTED,
                 anchor="w",
             ).pack(anchor="w")
+            available = directory.is_dir()
+            ctk.CTkLabel(
+                card,
+                text="Available" if available else "Unavailable",
+                font=ctk.CTkFont(size=10, weight="bold"),
+                text_color=self.SUCCESS if available else self.WARNING,
+            ).pack(side="right", padx=(4, 18))
             self.folder_records.append(
                 (directory, variable, card, directory not in TARGET_DIRECTORIES)
             )
@@ -274,9 +321,11 @@ class CleanerApp(ctk.CTk):
     def _build_actions(self) -> None:
         # Preview is the only entry point to cleanup; deletion starts only
         # after the user reviews and accepts the read-only analysis.
+        actions = ctk.CTkFrame(self.content, fg_color="transparent")
+        actions.pack(fill="x", padx=36, pady=(22, 8))
         self.clean_button = ctk.CTkButton(
-            self,
-            text="◌  Preview cleanup",
+            actions,
+            text="Preview cleanup",
             height=52,
             corner_radius=26,
             font=ctk.CTkFont(size=15, weight="bold"),
@@ -284,39 +333,55 @@ class CleanerApp(ctk.CTk):
             hover_color="#78a0ff",
             command=self._confirm_cleanup,
         )
-        self.clean_button.pack(fill="x", padx=36, pady=(25, 10))
+        self.clean_button.pack(fill="x")
 
         self.progress = ctk.CTkProgressBar(
-            self,
+            self.content,
             height=5,
             corner_radius=3,
             progress_color=self.ACCENT,
             fg_color=self.CARD,
         )
-        self.progress.pack(fill="x", padx=36)
+        self.progress.pack(fill="x", padx=36, pady=(4, 0))
         self.progress.set(0)
+        self.cancel_button = ctk.CTkButton(
+            self.content,
+            text="Cancel cleanup",
+            height=34,
+            corner_radius=17,
+            fg_color=self.CARD,
+            hover_color=self.CARD_HOVER,
+            text_color=self.WARNING,
+            state="disabled",
+            command=self._cancel_cleanup,
+        )
+        self.cancel_button.pack(pady=(10, 0))
 
     def _build_status(self) -> None:
         # These labels provide immediate feedback without opening a console.
+        status_card = ctk.CTkFrame(
+            self.content, fg_color=self.CARD, corner_radius=16
+        )
+        status_card.pack(fill="x", padx=36, pady=(14, 8))
         self.status = ctk.CTkLabel(
-            self,
+            status_card,
             text="Ready when you are",
-            font=ctk.CTkFont(size=13),
+            font=ctk.CTkFont(size=13, weight="bold"),
             text_color=self.MUTED,
         )
-        self.status.pack(pady=(13, 3))
+        self.status.pack(anchor="w", padx=18, pady=(13, 3))
         self.summary = ctk.CTkLabel(
-            self,
+            status_card,
             text="Root folders are always preserved",
             font=ctk.CTkFont(size=11),
             text_color="#697688",
         )
-        self.summary.pack()
+        self.summary.pack(anchor="w", padx=18, pady=(0, 13))
 
     def _build_report_button(self) -> None:
         self.report_button = ctk.CTkButton(
-            self,
-            text="⌕  Deleted files",
+            self.content,
+            text="View last report",
             height=34,
             corner_radius=17,
             fg_color="transparent",
@@ -325,7 +390,21 @@ class CleanerApp(ctk.CTk):
             state="disabled",
             command=self._show_deleted_files,
         )
-        self.report_button.pack(pady=(15, 0))
+        self.report_button.pack(pady=(8, 18))
+        self.exit_button = ctk.CTkButton(
+            self.content,
+            text="Exit",
+            width=120,
+            height=34,
+            corner_radius=17,
+            fg_color="transparent",
+            hover_color="#3a2929",
+            border_width=1,
+            border_color=self.WARNING,
+            text_color=self.WARNING,
+            command=self._on_close,
+        )
+        self.exit_button.pack(pady=(0, 20))
 
     def _select_all(self) -> None:
         # Toggle all checkboxes together instead of forcing one fixed state.
@@ -371,7 +450,10 @@ class CleanerApp(ctk.CTk):
         self.running = True
         self.last_preview = None
         self.last_result = None
+        self.close_requested = False
+        self.cleanup_cancellation.clear()
         self.report_button.configure(state="disabled")
+        self.cancel_button.configure(state="disabled")
         self.clean_button.configure(state="disabled", text="Analyzing…")
         self.progress.configure(mode="indeterminate")
         self.progress.start()
@@ -431,7 +513,7 @@ class CleanerApp(ctk.CTk):
             self.ACCENT,
         )
 
-        breakdown_card = ctk.CTkFrame(
+        breakdown_card = ctk.CTkScrollableFrame(
             window, fg_color=self.CARD, corner_radius=18
         )
         breakdown_card.pack(fill="both", expand=True, padx=24, pady=18)
@@ -465,6 +547,13 @@ class CleanerApp(ctk.CTk):
             font=ctk.CTkFont(size=12),
             text_color=self.MUTED,
         ).pack(anchor="w", padx=30)
+        if preview.inaccessible:
+            ctk.CTkLabel(
+                window,
+                text=f"Warning: {preview.inaccessible} item(s) could not be analyzed.",
+                font=ctk.CTkFont(size=11, weight="bold"),
+                text_color=self.WARNING,
+            ).pack(anchor="w", padx=30, pady=(4, 0))
         ctk.CTkLabel(
             window,
             text="Preview values are informational. Files may change before cleanup.",
@@ -492,6 +581,11 @@ class CleanerApp(ctk.CTk):
             hover_color="#78a0ff",
             command=lambda: self._continue_cleanup(window),
         ).pack(side="left", expand=True, fill="x", padx=(6, 0))
+        window.bind("<Escape>", lambda event: window.destroy())
+        window.bind(
+            "<Return>",
+            lambda event: self._continue_cleanup(window),
+        )
 
     def _preview_stat(
         self, parent: ctk.CTkFrame, label: str, value: str, color: str
@@ -539,7 +633,10 @@ class CleanerApp(ctk.CTk):
         # is unknown until each directory has been scanned.
         self.running = True
         self.last_result = None
+        self.close_requested = False
+        self.cleanup_cancellation.clear()
         self.report_button.configure(state="disabled")
+        self.cancel_button.configure(state="normal")
         self.clean_button.configure(state="disabled", text="Cleaning…")
         self.progress.configure(mode="indeterminate")
         self.progress.start()
@@ -561,11 +658,13 @@ class CleanerApp(ctk.CTk):
         space_reclaimed_bytes = 0
         try:
             for directory in directories:
-                result = clean_directory(directory)
+                result = clean_directory(directory, self.cleanup_cancellation)
                 deleted.extend(result.deleted)
                 failed.extend(result.failed)
                 files_deleted += result.files_deleted
                 space_reclaimed_bytes += result.space_reclaimed_bytes
+                if result.cancelled:
+                    break
         except Exception as error:
             log_event(
                 "ERROR",
@@ -583,6 +682,7 @@ class CleanerApp(ctk.CTk):
                     failed,
                     files_deleted,
                     space_reclaimed_bytes,
+                    self.cleanup_cancellation.is_set(),
                 ),
             )
         )
@@ -601,7 +701,8 @@ class CleanerApp(ctk.CTk):
             self.progress.stop()
             self.progress.configure(mode="determinate")
             self.progress.set(1)
-            self.clean_button.configure(state="normal", text="◌  Preview cleanup")
+            self.clean_button.configure(state="normal", text="Preview cleanup")
+            self.cancel_button.configure(state="disabled")
             self.status.configure(text="Preview ready", text_color=self.SUCCESS)
             self._show_preview(payload)
         elif event == "cleanup" and isinstance(payload, CleanupResult):
@@ -610,7 +711,8 @@ class CleanerApp(ctk.CTk):
             self.running = False
             self.progress.stop()
             self.progress.configure(mode="determinate")
-            self.clean_button.configure(state="normal", text="◌  Preview cleanup")
+            self.clean_button.configure(state="normal", text="Preview cleanup")
+            self.cancel_button.configure(state="disabled")
             self.status.configure(text="Operation failed", text_color=self.WARNING)
             messagebox.showerror("Operation error", payload)
 
@@ -621,12 +723,21 @@ class CleanerApp(ctk.CTk):
         self.progress.stop()
         self.progress.configure(mode="determinate")
         self.progress.set(1 if not result.failed else 0.7)
-        self.clean_button.configure(state="normal", text="◌  Preview cleanup")
+        self.clean_button.configure(state="normal", text="Preview cleanup")
+        self.cancel_button.configure(state="disabled")
         self.status.configure(
-            text="Cleanup complete"
-            if not result.failed
-            else "Cleanup complete with warnings",
-            text_color=self.SUCCESS if not result.failed else self.WARNING,
+            text=(
+                "Cleanup cancelled"
+                if result.cancelled
+                else "Cleanup complete"
+                if not result.failed
+                else "Cleanup complete with warnings"
+            ),
+            text_color=(
+                self.WARNING
+                if result.cancelled or result.failed
+                else self.SUCCESS
+            ),
         )
         self.summary.configure(
             text=f"{len(result.deleted)} item(s) deleted  •  "
@@ -637,6 +748,7 @@ class CleanerApp(ctk.CTk):
             "items_deleted": len(result.deleted),
             "space_reclaimed_bytes": result.space_reclaimed_bytes,
             "failed_items": len(result.failed),
+            "cancelled": result.cancelled,
         }
         if result.failed:
             cleanup_details["failed_operations"] = [
@@ -665,7 +777,30 @@ class CleanerApp(ctk.CTk):
                 f"• {path}: {error}" for path, error in result.failed
             )
         self.report_button.configure(state="normal")
-        self.status.configure(text="Cleanup complete — report ready", text_color=self.SUCCESS)
+        if self.close_requested:
+            self.destroy()
+            return
+        self.status.configure(
+            text=(
+                "Cleanup cancelled — report ready"
+                if result.cancelled
+                else "Cleanup complete — report ready"
+            ),
+            text_color=self.WARNING if result.cancelled else self.SUCCESS,
+        )
+
+    def _cancel_cleanup(self) -> None:
+        """Request cancellation without interrupting the worker thread."""
+        if not self.running:
+            return
+        if messagebox.askyesno(
+            "Cancel cleanup",
+            "Stop cleanup after the current item finishes?",
+        ):
+            self.cleanup_cancellation.set()
+            self.cancel_button.configure(state="disabled")
+            self.status.configure(text="Cancelling", text_color=self.WARNING)
+
 
     def _show_deleted_files(self) -> None:
         """Open the optional modern report window after a cleanup."""
@@ -691,6 +826,14 @@ class CleanerApp(ctk.CTk):
             font=ctk.CTkFont(size=13),
             text_color=self.MUTED,
         ).pack(anchor="w", padx=28, pady=(0, 16))
+        search_row = ctk.CTkFrame(report, fg_color="transparent")
+        search_row.pack(fill="x", padx=28, pady=(0, 10))
+        search_entry = ctk.CTkEntry(
+            search_row,
+            placeholder_text="Filter report...",
+            height=34,
+        )
+        search_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
         textbox = ctk.CTkTextbox(
             report,
             corner_radius=14,
@@ -700,20 +843,49 @@ class CleanerApp(ctk.CTk):
             wrap="word",
         )
         textbox.pack(fill="both", expand=True, padx=28, pady=(0, 18))
-        lines = "\n".join(
-            f"{number}. {path}"
-            for number, path in enumerate(self.last_result.deleted, start=1)
-        )
-        if not lines:
-            lines = "No files or folders were deleted."
-        if self.last_result.failed:
-            lines += "\n\nSkipped:\n" + "\n".join(
-                f"• {path}: {error}" for path, error in self.last_result.failed
-            )
-        textbox.insert("1.0", lines)
-        textbox.configure(state="disabled")
+        def render_report(*_: object) -> None:
+            query = search_entry.get().strip().lower()
+            lines = [
+                f"{number}. {path}"
+                for number, path in enumerate(self.last_result.deleted, start=1)
+                if not query or query in str(path).lower()
+            ]
+            skipped = [
+                f"• {path}: {error}"
+                for path, error in self.last_result.failed
+                if not query or query in str(path).lower() or query in str(error).lower()
+            ]
+            if not lines:
+                lines = ["No matching deleted items."]
+            if skipped:
+                lines.extend(["", "Skipped:"] + skipped)
+            textbox.configure(state="normal")
+            textbox.delete("1.0", "end")
+            textbox.insert("1.0", "\n".join(lines))
+            textbox.configure(state="disabled")
+
+        search_entry.bind("<KeyRelease>", render_report)
+        render_report()
+        action_row = ctk.CTkFrame(report, fg_color="transparent")
+        action_row.pack(fill="x", padx=28, pady=(0, 18))
         ctk.CTkButton(
-            report,
+            action_row,
+            text="Copy report",
+            height=34,
+            fg_color=self.CARD,
+            hover_color=self.CARD_HOVER,
+            command=lambda: self._copy_report(),
+        ).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(
+            action_row,
+            text="Save report",
+            height=34,
+            fg_color=self.CARD,
+            hover_color=self.CARD_HOVER,
+            command=self._save_report,
+        ).pack(side="left")
+        ctk.CTkButton(
+            action_row,
             text="Close",
             width=120,
             height=38,
@@ -721,13 +893,57 @@ class CleanerApp(ctk.CTk):
             fg_color=self.ACCENT,
             hover_color="#78a0ff",
             command=report.destroy,
-        ).pack(pady=(0, 24))
+        ).pack(side="right")
+
+    def _report_text(self) -> str:
+        """Return the latest cleanup report as plain text."""
+        if self.last_result is None:
+            return ""
+        lines = [
+            f"{number}. {path}"
+            for number, path in enumerate(self.last_result.deleted, start=1)
+        ]
+        if not lines:
+            lines = ["No files or folders were deleted."]
+        if self.last_result.failed:
+            lines.extend(
+                ["", "Skipped:"]
+                + [
+                    f"• {path}: {error}"
+                    for path, error in self.last_result.failed
+                ]
+            )
+        return "\n".join(lines)
+
+    def _copy_report(self) -> None:
+        """Copy the latest report to the Windows clipboard."""
+        self.clipboard_clear()
+        self.clipboard_append(self._report_text())
+        self.update()
+
+    def _save_report(self) -> None:
+        """Save the latest report as a text file selected by the user."""
+        path = filedialog.asksaveasfilename(
+            title="Save cleanup report",
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            Path(path).write_text(self._report_text(), encoding="utf-8")
+        except OSError as error:
+            messagebox.showerror("Could not save report", str(error))
 
     def _animate_header(self) -> None:
         # Schedule a small animation repeatedly without blocking the GUI.
         if self.running:
             self.animation_step = (self.animation_step + 1) % 4
-            self.status.configure(text="Cleaning" + "." * self.animation_step)
+            if not self.cleanup_cancellation.is_set():
+                self.status.configure(
+                    text="Cleaning" + "." * self.animation_step,
+                    text_color=self.ACCENT,
+                )
         self.after(350, self._animate_header)
 
     def _animate_ui(self) -> None:
@@ -740,6 +956,12 @@ class CleanerApp(ctk.CTk):
 
     def _on_close(self) -> None:
         """Record shutdown before closing the application window."""
+        if self.running:
+            self.close_requested = True
+            self.cleanup_cancellation.set()
+            self.cancel_button.configure(state="disabled")
+            self.status.configure(text="Cancelling before close", text_color=self.WARNING)
+            return
         log_event("INFO", "APPLICATION_SHUTDOWN", "ClearSpace is shutting down.")
         self.destroy()
 
@@ -750,7 +972,8 @@ def main() -> None:
     if os.name != "nt":
         messagebox.showwarning("Windows only", "This program is intended for Windows.")
     if not is_admin():
-        request_admin(Path(__file__).with_name("os_cleaner.py"))
+        if request_admin(Path(__file__).with_name("os_cleaner.py")):
+            return
     app = CleanerApp()
     app.protocol("WM_DELETE_WINDOW", app._on_close)
     app.mainloop()

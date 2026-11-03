@@ -6,30 +6,33 @@
 [![Python](https://img.shields.io/badge/Language-Python-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![CustomTkinter](https://img.shields.io/badge/Interface-CustomTkinter-245C9C?style=flat-square)](https://github.com/TomSchimansky/CustomTkinter)
 
-ClearSpace is a personal project designed to clean selected Windows temporary directories through a modern dark interface.
-
-It lets you manage cleaning locations, monitor the process and review the results.
+ClearSpace previews and cleans selected Windows folders through a responsive
+dashboard.
 
 > [!WARNING]
-> **Deletion is permanent.** Files are not moved to the Recycle Bin, and there is no undo function. Always review your selected folders before cleaning.
+> **Deletion is permanent.** Files are not moved to the Recycle Bin and there
+> is no undo function. Always review the selected locations and preview before
+> continuing.
 
 ---
 
-## ✨ Features
+## Features
 
-- Modern dark interface with blue accents.
-- Select built-in or custom cleaning locations.
-- Add and remove custom folders.
-- Recursive file and folder cleanup.
-- Background processing to keep the interface responsive.
-- Read-only cleanup preview with file-count and size statistics.
-- Directory-by-directory preview breakdown before deletion.
-- Animated progress and status feedback.
-- Administrator privileges through Windows UAC.
-- Cleanup reports showing deleted and skipped items.
-- Persistent structured activity history in `logs.json`.
+- Preview files, sizes, warnings, and directory breakdowns before deletion.
+- Clean built-in or custom folders recursively while preserving their roots.
+- Skip inaccessible, locked, symbolic-link, and other reparse-point items.
+- Cancel cleanup safely while keeping the interface responsive.
+- Use UAC elevation when available, with safe standard-mode fallback.
+- Reject drive roots and protected Windows, user-profile, Users, and Program
+  Files locations.
+- Use normalized paths and atomic configuration/log writes.
+- Use a modern dark, scrollable dashboard with grouped locations, status
+  animation, availability labels, hover feedback, and safe Exit controls.
+- Use `Ctrl+P` for preview, `Escape` to cancel/close, and `Enter` to continue.
+- View, filter, copy, or save deleted and skipped-item reports.
+- Default window size: `760x950`.
 
-## 📁 Cleaning locations
+## Cleaning locations
 
 ClearSpace offers these default locations:
 
@@ -37,15 +40,19 @@ ClearSpace offers these default locations:
 - `C:\Windows\Temp`
 - `%LOCALAPPDATA%\Temp`
 
-You can also add your own folders.
+The local temporary folder uses the current user's `%LOCALAPPDATA%`, with a
+`Path.home()` fallback.
 
-**The selected root directories are preserved.** Only their contents are targeted.
+You can add custom folders through the interface. Custom selections are saved
+in `custom_directories.json`, and removing a custom folder from the list does
+not delete its contents.
 
-Custom folder selections are saved in `custom_directories.json`.
+## Requirements
 
-## 📦 Installation
-
-**Requirements:** Windows, Python and CustomTkinter.
+- Windows
+- Python 3.9 or newer
+- Tkinter
+- CustomTkinter
 
 Install the required package:
 
@@ -53,71 +60,85 @@ Install the required package:
 python -m pip install customtkinter
 ```
 
-Launch ClearSpace:
+Tkinter is normally included with Windows Python. Check it with:
 
 ```powershell
+python -c "import tkinter; print('Tkinter is installed')"
+```
+
+## Installation and launch
+
+From the project directory, run:
+
+```powershell
+python -m pip install customtkinter
 python os_cleaner.py
 ```
 
-## ▶️ How to use
+ClearSpace may request UAC elevation. If refused, it continues in standard
+mode, but some protected files may not be removable.
 
-1. Select the folders you want to clean.
+## How to use
+
+1. Select the locations you want to clean.
 2. Add custom locations if needed.
-3. Click **Preview cleanup**.
-4. Review the read-only analysis.
-5. Click **Continue to cleanup** or **Cancel**.
-6. Open **Deleted files** to inspect the results.
+3. Click **Preview cleanup** or press `Ctrl+P`.
+4. Review the file count, potential space reclaimed, warnings, and directory
+   breakdown.
+5. Click **Continue to cleanup** to begin deletion, or **Cancel** to return.
+6. Use **Cancel cleanup** or press `Escape` to request cancellation during an
+   active cleanup.
+7. Open **View last report** to inspect, filter, copy, or save the results.
+8. Use **Exit** to close the application safely.
 
-Some protected or currently used files may be skipped. Administrator access can help with restricted locations.
+The preview is read-only, and ClearSpace performs a fresh cleanup pass after
+confirmation because files may change.
 
-The preview never deletes, moves, or changes files. Its values are
-informational: ClearSpace performs a fresh cleanup pass after confirmation
-because files may change between analysis and deletion.
+## Testing
 
-## 🧩 Project structure
+Run the automated tests from the project directory:
 
-| File | Purpose |
+```powershell
+python -m unittest discover -s tests -v
+```
+
+Tests cover path detection, root preservation, safety validation, duplicate
+handling, atomic writes, administrator relaunch, cancellation, reparse-point
+protection, and log recovery.
+
+## Project structure
+
+| File or folder | Purpose |
 |---|---|
-| `cleaner.py` | Cleanup engine and backend operations |
-| `ui.py` | CustomTkinter interface and application controls |
+| `cleaner.py` | Cleanup engine, safety validation, logging, and persistence |
+| `ui.py` | CustomTkinter dashboard and application controls |
 | `os_cleaner.py` | Application launcher |
+| `tests/` | Automated backend tests |
+| `custom_directories.json` | Saved custom cleanup locations |
+| `logs.json` | Generated structured activity history |
 | `requirements.md` | Installation guide |
 | `diagram organisation.md` | Original project planning notes |
+| `new_changes_list.txt` | Detailed implementation change history |
+| `README_updated_draft.md` | Draft documentation containing the latest changes |
 
-The launcher connects the interface to the backend, keeping the project organized into separate files.
+## Logging
 
-## 📝 JSON logging
+ClearSpace stores structured activity history in `logs.json`, including
+timestamps, levels, events, messages, operation details, cancellations, and
+errors. Logs are created automatically and written atomically.
 
-ClearSpace stores structured application history in the single JSON file
-`logs.json` next to the application files. The file is created automatically
-when the first event is recorded.
-
-Logged events include application startup and shutdown, administrator status,
-preview start and completion, cleanup start and completion, custom-folder
-changes, and unexpected or logging errors. Cleanup results are kept in the
-single completion event rather than duplicated across separate deleted/skipped
-events.
-
-Each entry includes an ISO 8601 timestamp, log level, event name, message, and
-optional directory and operation details such as file counts, failure counts,
-and reclaimed bytes.
-
-The logger uses Python's built-in `json` module, a thread lock, and an atomic
-temporary-file replacement. Missing or empty files are initialized safely. If
-`logs.json` contains invalid JSON, the unreadable content is preserved in a
-recoverable JSON `details` entry before normal logging continues. Logging
-failures are isolated so they cannot crash the cleaner or freeze its UI.
-
-## 🔒 Safety
+## Safety limitations
 
 - Deletion is permanent.
-- Root folders are preserved.
+- Deleted files are not moved to the Recycle Bin.
 - Locked or inaccessible files may be skipped.
-- Custom folders can be removed from the list without deleting their contents.
-- Cleanup requires explicit confirmation.
+- Files can change between preview and cleanup.
+- Cancellation stops before the next item; the current filesystem operation
+  may finish first.
+- The application should not be force-terminated during cleanup.
 
-## 📄 License
+## License
 
 ClearSpace is a personal project created for learning and experimentation.
 
-Use it carefully and review the selected locations before starting a cleanup.
+Use it carefully and review the selected folders before starting a cleanup.
