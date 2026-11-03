@@ -30,7 +30,7 @@ dashboard.
   animation, availability labels, hover feedback, and safe Exit controls.
 - Use `Ctrl+P` for preview, `Escape` to cancel/close, and `Enter` to continue.
 - View, filter, copy, or save deleted and skipped-item reports.
-- Default window size: `760x950`.
+- Default window size: `760x890`.
 
 ## Cleaning locations
 
