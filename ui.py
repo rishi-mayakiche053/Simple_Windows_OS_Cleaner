@@ -405,6 +405,13 @@ class CleanerApp(ctk.CTk):
             command=self._on_close,
         )
         self.exit_button.pack(pady=(0, 20))
+        ctk.CTkLabel(
+            self.content,
+            text="Shortcuts: Ctrl+P Preview  •  Esc Cancel/close preview  •  "
+            "Enter Continue (preview)",
+            font=ctk.CTkFont(size=10),
+            text_color=self.MUTED,
+        ).pack(pady=(0, 12))
 
     def _select_all(self) -> None:
         # Toggle all checkboxes together instead of forcing one fixed state.
