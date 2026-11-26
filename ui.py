@@ -405,13 +405,6 @@ class CleanerApp(ctk.CTk):
             command=self._on_close,
         )
         self.exit_button.pack(pady=(0, 20))
-        ctk.CTkLabel(
-            self.content,
-            text="Shortcuts: Ctrl+P Preview  •  Esc Cancel/close preview  •  "
-            "Enter Continue (preview)",
-            font=ctk.CTkFont(size=10),
-            text_color=self.MUTED,
-        ).pack(pady=(0, 12))
 
     def _select_all(self) -> None:
         # Toggle all checkboxes together instead of forcing one fixed state.
@@ -578,21 +571,26 @@ class CleanerApp(ctk.CTk):
             fg_color=self.CARD,
             hover_color=self.CARD_HOVER,
             command=window.destroy,
-        ).pack(side="left", expand=True, fill="x", padx=(0, 6))
+        ).pack(side="left", expand=True, fill="x", padx=(0, 4))
         ctk.CTkButton(
             actions,
-            text="Continue to cleanup",
+            text="Move to Recycle Bin",
             height=42,
             corner_radius=21,
             fg_color=self.ACCENT,
             hover_color="#78a0ff",
-            command=lambda: self._continue_cleanup(window),
-        ).pack(side="left", expand=True, fill="x", padx=(6, 0))
+            command=lambda: self._continue_cleanup(window, to_recycle_bin=True),
+        ).pack(side="left", expand=True, fill="x", padx=4)
+        ctk.CTkButton(
+            actions,
+            text="Delete permanently",
+            height=42,
+            corner_radius=21,
+            fg_color="#c0392b",
+            hover_color="#e74c3c",
+            command=lambda: self._continue_cleanup(window, to_recycle_bin=False),
+        ).pack(side="left", expand=True, fill="x", padx=(4, 0))
         window.bind("<Escape>", lambda event: window.destroy())
-        window.bind(
-            "<Return>",
-            lambda event: self._continue_cleanup(window),
-        )
 
     def _preview_stat(
         self, parent: ctk.CTkFrame, label: str, value: str, color: str
@@ -613,16 +611,30 @@ class CleanerApp(ctk.CTk):
             text_color=color,
         ).pack(anchor="w", padx=18, pady=(2, 16))
 
-    def _continue_cleanup(self, preview_window: ctk.CTkToplevel) -> None:
+    def _continue_cleanup(
+        self, preview_window: ctk.CTkToplevel, to_recycle_bin: bool = True
+    ) -> None:
         """Close the preview and begin a fresh deletion pass."""
         if self.last_preview is None:
             preview_window.destroy()
             return
+        if not to_recycle_bin:
+            confirmed = messagebox.askyesno(
+                "Permanent deletion",
+                "This will permanently delete the selected files.\n"
+                "They cannot be recovered from the Recycle Bin.\n\n"
+                "Are you sure you want to continue?",
+                icon="warning",
+            )
+            if not confirmed:
+                return
         directories = [item.directory for item in self.last_preview.directories]
         preview_window.destroy()
-        self._start_cleanup(directories)
+        self._start_cleanup(directories, to_recycle_bin=to_recycle_bin)
 
-    def _start_cleanup(self, directories: list[Path]) -> None:
+    def _start_cleanup(
+        self, directories: list[Path], to_recycle_bin: bool = True
+    ) -> None:
         """Run the real cleanup after the preview has been explicitly accepted."""
         selected = [
             directory for directory in directories if directory.is_dir()
@@ -630,11 +642,15 @@ class CleanerApp(ctk.CTk):
         if not selected:
             messagebox.showwarning("No locations selected", "Select at least one location.")
             return
+        mode_label = "MOVE_TO_RECYCLE_BIN" if to_recycle_bin else "DELETE_PERMANENTLY"
         log_event(
             "INFO",
             "CLEANUP_STARTED",
             "Cleanup operation started after preview confirmation.",
-            details={"directories": [str(directory) for directory in selected]},
+            details={
+                "directories": [str(directory) for directory in selected],
+                "mode": mode_label,
+            },
         )
         # Indeterminate progress is used because the total number of entries
         # is unknown until each directory has been scanned.
@@ -647,16 +663,23 @@ class CleanerApp(ctk.CTk):
         self.clean_button.configure(state="disabled", text="Cleaning…")
         self.progress.configure(mode="indeterminate")
         self.progress.start()
-        self.status.configure(text="Preparing cleanup…", text_color=self.ACCENT)
+        status_text = (
+            "Moving items to Recycle Bin…"
+            if to_recycle_bin
+            else "Deleting permanently…"
+        )
+        self.status.configure(text=status_text, text_color=self.ACCENT)
         # A daemon thread keeps the interface responsive during filesystem I/O.
         threading.Thread(
             target=self._cleanup_worker,
-            args=(selected,),
+            args=(selected, to_recycle_bin),
             daemon=True,
         ).start()
         self.after(100, self._poll_results)
 
-    def _cleanup_worker(self, directories: list[Path]) -> None:
+    def _cleanup_worker(
+        self, directories: list[Path], to_recycle_bin: bool = True
+    ) -> None:
         # This method must not update Tkinter widgets directly; it only
         # collects results and sends them to the main thread.
         deleted: list[Path] = []
@@ -665,7 +688,11 @@ class CleanerApp(ctk.CTk):
         space_reclaimed_bytes = 0
         try:
             for directory in directories:
-                result = clean_directory(directory, self.cleanup_cancellation)
+                result = clean_directory(
+                    directory,
+                    self.cleanup_cancellation,
+                    to_recycle_bin=to_recycle_bin,
+                )
                 deleted.extend(result.deleted)
                 failed.extend(result.failed)
                 files_deleted += result.files_deleted
@@ -690,6 +717,7 @@ class CleanerApp(ctk.CTk):
                     files_deleted,
                     space_reclaimed_bytes,
                     self.cleanup_cancellation.is_set(),
+                    to_recycle_bin=to_recycle_bin,
                 ),
             )
         )
@@ -906,12 +934,21 @@ class CleanerApp(ctk.CTk):
         """Return the latest cleanup report as plain text."""
         if self.last_result is None:
             return ""
+        mode = (
+            "Move to Recycle Bin"
+            if getattr(self.last_result, "to_recycle_bin", True)
+            else "Delete permanently"
+        )
         lines = [
+            f"Mode used: {mode}",
+            "",
+        ]
+        lines.extend(
             f"{number}. {path}"
             for number, path in enumerate(self.last_result.deleted, start=1)
-        ]
-        if not lines:
-            lines = ["No files or folders were deleted."]
+        )
+        if len(lines) == 2:
+            lines.append("No files or folders were removed.")
         if self.last_result.failed:
             lines.extend(
                 ["", "Skipped:"]
