@@ -17,6 +17,11 @@ from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 
+try:
+    import send2trash
+except ImportError:  # pragma: no cover
+    send2trash = None  # type: ignore
+
 
 def get_local_temp_directory() -> Path:
     """Return the current user's local temporary directory."""
@@ -35,7 +40,7 @@ TARGET_DIRECTORIES = (
 CUSTOM_DIRECTORIES_FILE = Path(__file__).with_name("custom_directories.json")
 LOGS_FILE = Path(__file__).with_name("logs.json")
 APPLICATION_NAME = "ClearSpace"
-APPLICATION_VERSION = "1.0"
+APPLICATION_VERSION = "1.1"
 REPARSE_POINT_ATTRIBUTE = 0x0400
 _LOG_LOCK = threading.RLock()
 
@@ -49,6 +54,7 @@ class CleanupResult:
     files_deleted: int = 0
     space_reclaimed_bytes: int = 0
     cancelled: bool = False
+    to_recycle_bin: bool = True
 
 
 @dataclass
@@ -324,9 +330,6 @@ def validate_cleanup_directory(directory: Path) -> str | None:
     return None
 
 
-
-
-
 def load_custom_directories() -> list[Path]:
     """Load user-added folders, ignoring invalid or duplicated entries."""
     if not CUSTOM_DIRECTORIES_FILE.is_file():
@@ -426,13 +429,39 @@ def request_admin(script_path: Path | None = None) -> bool:
 def clean_directory(
     directory: Path,
     cancellation_event: threading.Event | None = None,
+    to_recycle_bin: bool = True,
 ) -> CleanupResult:
-    """Remove all contents in a directory while preserving its root folder."""
+    """Remove all contents in a directory while preserving its root folder.
+
+    When ``to_recycle_bin`` is True (default), items are sent to the Windows
+    Recycle Bin via ``send2trash``. When False, items are permanently deleted
+    with ``unlink`` / ``rmdir``.
+    """
     deleted: list[Path] = []
     failed: list[tuple[Path, OSError]] = []
     deleted_files = 0
     reclaimed_bytes = 0
     cancelled = False
+
+    if to_recycle_bin and send2trash is None:
+        failed.append(
+            (
+                directory,
+                OSError(
+                    "send2trash is not installed. "
+                    "Run: python -m pip install send2trash"
+                ),
+            )
+        )
+        log_event(
+            "ERROR",
+            "SEND2TRASH_MISSING",
+            "send2trash package is required for Recycle Bin mode.",
+            directory=directory,
+        )
+        return CleanupResult(
+            deleted, failed, to_recycle_bin=to_recycle_bin
+        )
 
     validation_error = validate_cleanup_directory(directory)
     if validation_error:
@@ -442,9 +471,11 @@ def clean_directory(
             "CLEANUP_DIRECTORY_REJECTED",
             "Cleanup directory rejected by safety validation.",
             directory=directory,
-            details={"error": validation_error},
+            details={"error": validation_error, "to_recycle_bin": to_recycle_bin},
         )
-        return CleanupResult(deleted, failed)
+        return CleanupResult(deleted, failed, to_recycle_bin=to_recycle_bin)
+
+    mode_label = "MOVE_TO_RECYCLE_BIN" if to_recycle_bin else "DELETE_PERMANENTLY"
 
     def remove_contents(folder: Path) -> None:
         nonlocal cancelled, deleted_files, reclaimed_bytes
@@ -472,7 +503,10 @@ def clean_directory(
                 if cancelled:
                     return
                 try:
-                    entry.rmdir()
+                    if to_recycle_bin:
+                        send2trash.send2trash(str(entry))
+                    else:
+                        entry.rmdir()
                     deleted.append(entry)
                 except OSError as error:
                     failed.append((entry, error))
@@ -487,7 +521,10 @@ def clean_directory(
                     if entry.is_file()
                     else 0
                 )
-                entry.unlink()
+                if to_recycle_bin:
+                    send2trash.send2trash(str(entry))
+                else:
+                    entry.unlink()
                 deleted.append(entry)
                 deleted_files += 1
                 reclaimed_bytes += file_size
@@ -502,10 +539,19 @@ def clean_directory(
             "CLEANUP_DIRECTORY_FAILED",
             "Cleanup directory was not found.",
             directory=directory,
-            details={"error": str(error)},
+            details={"error": str(error), "mode": mode_label},
         )
-        return CleanupResult(deleted, failed, cancelled=cancelled)
+        return CleanupResult(
+            deleted, failed, cancelled=cancelled, to_recycle_bin=to_recycle_bin
+        )
 
+    log_event(
+        "INFO",
+        "CLEANUP_DIRECTORY_STARTED",
+        f"Cleaning directory ({mode_label}).",
+        directory=directory,
+        details={"mode": mode_label},
+    )
     remove_contents(directory)
     return CleanupResult(
         deleted,
@@ -513,4 +559,5 @@ def clean_directory(
         deleted_files,
         reclaimed_bytes,
         cancelled,
+        to_recycle_bin=to_recycle_bin,
     )
